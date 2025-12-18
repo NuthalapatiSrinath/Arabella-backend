@@ -1,0 +1,107 @@
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+.dockerignore
+
+# build / output
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+
+# environment / secrets
+.env
+.env.*          # .env.local, .env.test, etc.
+.env.local
+.env.production
+.env.development
+.env.test
+
+# logs
+logs/
+*.log
+*.log.*
+npm-debug.log*
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# runtime data & DB files
+tmp/
+temp/
+.cache/
+*.sqlite
+*.sqlite3
+dump.rdb
+
+# uploads / user generated content
+uploads/
+public/uploads/
+storage/
+media/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# VSCode
+.vscode/
+.history/
+.localhistory/
+
+# IDEs
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# JetBrains
+*.iml
+.out/
+*.ipr
+*.iws
+
+# MacOS
+.AppleDouble
+.LSOverride
+
+# Windows
+$RECYCLE.BIN/
+
+# Certificates, keys
+*.pem
+*.key
+*.crt
+
+# Docker
+docker-compose.override.yml
+docker-compose.*.yml
+
+# Test / coverage
+coverage/
+nyc_output/
+jest-cache/
+jest-results.json
+
+# Lock files for alternative package managers (if you don't use them)
+pnpm-lock.yaml
+yarn.lock
+
+# Generated swagger / docs
+swagger.json
+docs/swagger*
+apidoc/
+
+# Misc
+.vagrant/
+*.log.*.gz
+*.tgz
+*.bak
+*.orig
+*.swp
