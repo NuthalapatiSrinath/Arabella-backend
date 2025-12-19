@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const ratePlanSchema = new mongoose.Schema({
   roomType: {
@@ -6,18 +6,14 @@ const ratePlanSchema = new mongoose.Schema({
     ref: "RoomType",
     required: true,
   },
-  name: { type: String, required: true }, // e.g., "Non Refundable - Pay Now", "Breakfast Included"
+  name: { type: String, required: true }, // "Non Refundable - Pay Now"
 
-  // Price Modifiers
-  priceMultiplier: { type: Number, default: 1.0 }, // 1.0 = Base Price, 1.1 = 10% more
-  flatPremium: { type: Number, default: 0 }, // Add $20 fixed amount (e.g., for breakfast)
+  priceMultiplier: { type: Number, default: 1.0 },
+  flatPremium: { type: Number, default: 0 },
 
-  // Logic
   isRefundable: { type: Boolean, default: false },
   includesBreakfast: { type: Boolean, default: false },
-
-  // Cancellation Policy Text
   cancellationPolicy: { type: String, default: "Non-refundable" },
 });
 
-module.exports = mongoose.model("RatePlan", ratePlanSchema);
+export default mongoose.model("RatePlan", ratePlanSchema);

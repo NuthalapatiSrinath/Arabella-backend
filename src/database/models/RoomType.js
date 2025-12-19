@@ -1,28 +1,24 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const roomTypeSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true }, // e.g., "Single Room", "Deluxe Suite"
+    name: { type: String, required: true }, // "Twin Room"
     description: { type: String },
-    images: [{ type: String }], // Array of image URLs
-    size: { type: Number }, // e.g., 24 (in sqm)
+    images: [{ type: String }],
+    size: { type: Number }, // 24
 
-    // Capacity Logic
-    baseCapacity: { type: Number, required: true }, // Price covers up to this many people
+    // Occupancy
+    baseCapacity: { type: Number, required: true },
     maxAdults: { type: Number, required: true },
     maxChildren: { type: Number, required: true },
-    maxOccupancy: { type: Number, required: true }, // Absolute max people allowed
+    maxOccupancy: { type: Number, required: true },
 
-    // Amenities
-    amenities: [{ type: String }], // ["Wifi", "AC", "Bidet"]
+    amenities: [{ type: String }],
 
-    // Inventory Management
-    totalStock: { type: Number, required: true }, // How many of these rooms exist physically (e.g., 10)
-
-    // Base Price (Fallback)
+    totalStock: { type: Number, required: true },
     basePrice: { type: Number, required: true },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("RoomType", roomTypeSchema);
+export default mongoose.model("RoomType", roomTypeSchema);
