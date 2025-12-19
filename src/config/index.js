@@ -44,7 +44,11 @@ export const config = {
       ? Number(process.env.RATE_LIMIT_MAX)
       : 100,
   },
-
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiSecret: process.env.CLOUDINARY_API_SECRET,
+  },
   // -----------------------------
   // Email Configuration
   // -----------------------------
