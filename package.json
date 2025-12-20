@@ -24,7 +24,8 @@
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^7.0.10",
-    "razorpay": "^2.9.6"
+    "razorpay": "^2.9.6",
+    "twilio": "^5.11.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

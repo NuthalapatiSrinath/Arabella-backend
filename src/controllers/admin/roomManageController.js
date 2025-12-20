@@ -1,16 +1,26 @@
 import RoomType from "../../database/models/RoomType.js";
 import RatePlan from "../../database/models/RatePlan.js";
 
-// Create Room & Auto-generate Rates
+// --- 1. CREATE ROOM (With Duplicate Check) ---
 export const createRoom = async (req, res) => {
   try {
+    const { name } = req.body;
+
+    // A. DUPLICATE CHECK
+    const existingRoom = await RoomType.findOne({ name });
+    if (existingRoom) {
+      return res.status(409).json({
+        success: false,
+        message: `Room with name '${name}' already exists!`,
+      });
+    }
+
     const imageUrls = req.files ? req.files.map((f) => f.path) : [];
 
-    // Create Room
+    // B. CREATE ROOM
     const room = await RoomType.create({
       ...req.body,
       images: imageUrls,
-      // Ensure numbers are parsed
       basePrice: Number(req.body.basePrice),
       totalStock: Number(req.body.totalStock),
       baseCapacity: Number(req.body.baseCapacity),
@@ -19,7 +29,7 @@ export const createRoom = async (req, res) => {
       maxOccupancy: Number(req.body.maxOccupancy),
     });
 
-    // Create Default Plans
+    // C. AUTO-CREATE RATES
     await RatePlan.create([
       {
         roomType: room._id,
@@ -36,12 +46,68 @@ export const createRoom = async (req, res) => {
       },
     ]);
 
-    res.status(201).json({ success: true, data: room });
+    res.status(201).json({
+      success: true,
+      message: "Room Created Successfully",
+      data: room,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
+// --- 2. UPDATE ROOM (Fully Customizable) ---
 export const updateRoom = async (req, res) => {
-  // Standard Update Logic here...
+  try {
+    const { id } = req.params;
+    let updateData = { ...req.body };
+
+    // Find the room first
+    const room = await RoomType.findById(id);
+    if (!room) return res.status(404).json({ message: "Room not found" });
+
+    // A. HANDLE IMAGES (Append new ones to existing list)
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map((f) => f.path);
+      updateData.images = [...room.images, ...newImages]; // Keep old + Add new
+    }
+
+    // B. PARSE NUMBERS (If they are being updated)
+    if (updateData.basePrice)
+      updateData.basePrice = Number(updateData.basePrice);
+    if (updateData.totalStock)
+      updateData.totalStock = Number(updateData.totalStock);
+    // ... add other number fields if needed
+
+    // C. PERFORM UPDATE
+    const updatedRoom = await RoomType.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
+
+    res.json({ success: true, message: "Room Updated", data: updatedRoom });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// --- 3. DELETE ROOM (And its Rates) ---
+export const deleteRoom = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // A. Delete the Room
+    const deletedRoom = await RoomType.findByIdAndDelete(id);
+    if (!deletedRoom)
+      return res.status(404).json({ message: "Room not found" });
+
+    // B. Cleanup: Delete all RatePlans associated with this room
+    await RatePlan.deleteMany({ roomType: id });
+
+    res.json({
+      success: true,
+      message: "Room and its Rate Plans deleted successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 };

@@ -28,15 +28,20 @@ const bookingSchema = new mongoose.Schema(
 
     checkIn: { type: Date, required: true },
     checkOut: { type: Date, required: true },
+    nights: { type: Number, required: true },
 
     adults: { type: Number, required: true },
     children: { type: Number, default: 0 },
 
-    // --- 3. Financials ---
+    // --- 3. Financials (Detailed Invoice Data) ---
     invoiceNumber: { type: String, unique: true },
-    roomPriceTotal: { type: Number, required: true },
-    cityTax: { type: Number, default: 0 },
-    totalPrice: { type: Number, required: true }, // Final Amount
+
+    baseRatePerNight: { type: Number, required: true }, // Original Price
+    subTotal: { type: Number, required: true }, // Price * Nights (Before Discount)
+    discountAmount: { type: Number, default: 0 }, // "You Saved"
+    roomPriceTotal: { type: Number, required: true }, // After Discount
+    cityTax: { type: Number, default: 0 }, // Extra Tax
+    totalPrice: { type: Number, required: true }, // FINAL TO PAY
 
     // --- 4. Payment & Status ---
     paymentStatus: {
@@ -45,7 +50,7 @@ const bookingSchema = new mongoose.Schema(
       default: "Pending",
     },
 
-    // RAZORPAY FIELDS
+    // RAZORPAY FIELDS (Supports UPI, Cards, Netbanking automatically)
     razorpayOrderId: { type: String },
     razorpayPaymentId: { type: String },
 

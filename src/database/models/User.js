@@ -1,10 +1,10 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { config } from "../../../config/index.js";
+import { config } from "../../config/index.js";
 
 const userSchema = new mongoose.Schema({
-  // --- Basic Info ---
+  // --- Basic Auth ---
   name: { type: String, required: true, trim: true },
   email: {
     type: String,
@@ -16,7 +16,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true, select: false },
   role: { type: String, enum: ["user", "admin"], default: "user" },
 
-  // --- Profile Details (For Easy Booking) ---
+  // --- Profile Details (For Easy Payment) ---
   phone: { type: String },
   address: {
     street: { type: String },
@@ -31,17 +31,16 @@ const userSchema = new mongoose.Schema({
   verificationExpires: { type: Date, select: false },
 
   // --- Password Reset ---
-  resetPasswordToken: { type: String, select: false, index: true },
+  resetPasswordToken: { type: String, select: false },
   resetPasswordExpires: { type: Date, select: false },
 
   createdAt: { type: Date, default: Date.now },
 });
 
-// Pre-save hash password
+// Hash Password
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
-  const rounds = config.security.bcryptSaltRounds ?? 12;
-  this.password = await bcrypt.hash(this.password, rounds);
+  this.password = await bcrypt.hash(this.password, 12);
   next();
 });
 
@@ -50,37 +49,15 @@ userSchema.methods.validatePassword = function (candidate) {
   return bcrypt.compare(candidate, this.password);
 };
 
-// Generate Email Verification Token
+// Generate Verification Token
 userSchema.methods.generateVerificationToken = function () {
   const token = crypto.randomBytes(32).toString("hex");
-  // Save hashed version to DB
   this.verificationToken = crypto
     .createHash("sha256")
     .update(token)
     .digest("hex");
-  // Expire in 24 hours
-  this.verificationExpires = Date.now() + 24 * 60 * 60 * 1000;
-  return token; // Return raw token to send in email
-};
-
-// Generate Password Reset Token
-userSchema.methods.generatePasswordReset = function () {
-  const token = crypto.randomBytes(32).toString("hex");
-  this.resetPasswordToken = token;
-  this.resetPasswordExpires =
-    Date.now() + (config.auth.resetTokenExpiryMs ?? 3600000); // 1 hour
-  return token;
-};
-
-// Clean JSON output
-userSchema.methods.toJSON = function () {
-  const obj = this.toObject();
-  delete obj.password;
-  delete obj.verificationToken;
-  delete obj.verificationExpires;
-  delete obj.resetPasswordToken;
-  delete obj.resetPasswordExpires;
-  return obj;
+  this.verificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+  return token; // Send unhashed version to email
 };
 
 export default mongoose.model("User", userSchema);
