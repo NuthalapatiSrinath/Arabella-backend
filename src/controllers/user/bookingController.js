@@ -3,17 +3,15 @@ import RoomType from "../../database/models/RoomType.js";
 import RatePlan from "../../database/models/RatePlan.js";
 import Razorpay from "razorpay";
 import crypto from "crypto";
+import sendEmail from "../../utils/email.js";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-const generateInvoiceId = () =>
-  `ARA-${Math.floor(100000 + Math.random() * 900000)}`;
-
 // ==========================================
-// 1. INITIATE BOOKING (Calculate Price)
+// 1. INITIATE BOOKING
 // ==========================================
 export const initiateBooking = async (req, res) => {
   try {
@@ -24,7 +22,7 @@ export const initiateBooking = async (req, res) => {
       checkOut,
       adults,
       children,
-      selectedAmenities, // Array of names e.g. ["Candle Light Dinner"]
+      selectedAmenities,
     } = req.body;
 
     const room = await RoomType.findById(roomTypeId);
@@ -35,19 +33,16 @@ export const initiateBooking = async (req, res) => {
 
     const start = new Date(checkIn);
     const end = new Date(checkOut);
-    const nights = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24));
+    const nights = Math.max(
+      1,
+      Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24))
+    );
 
-    if (nights < 1) return res.status(400).json({ message: "Invalid dates" });
-
-    // --- A. APPLY ROOM DISCOUNT (Flash Sale) ---
-    const roomDiscountPercent = room.discountPercentage || 0;
-    const effectiveBasePrice = room.basePrice * (1 - roomDiscountPercent / 100);
-
-    // --- B. CALCULATE BASE NIGHTLY RATE ---
+    const effectiveBasePrice =
+      room.basePrice * (1 - (room.discountPercentage || 0) / 100);
     let nightlyPrice =
       effectiveBasePrice * rate.priceMultiplier + rate.flatPremium;
 
-    // --- C. ADD EXTRA GUEST CHARGES ---
     const numAdults = Number(adults);
     const numChildren = Number(children);
 
@@ -59,7 +54,6 @@ export const initiateBooking = async (req, res) => {
       nightlyPrice += numChildren * (rate.extraChildCharge || 0);
     }
 
-    // --- D. CALCULATE AMENITIES COST (Per Night) ---
     let amenitiesCostPerNight = 0;
     if (
       selectedAmenities &&
@@ -74,30 +68,13 @@ export const initiateBooking = async (req, res) => {
       });
     }
 
-    // --- E. TOTALS ---
-    // Formula: (RoomRate + Amenities) * Nights
     const totalNightlyRate = nightlyPrice + amenitiesCostPerNight;
     const roomPriceTotal = Math.round(totalNightlyRate * nights);
-    const cityTax = 150 * nights; // Example Fixed Tax
+    const cityTax = 150 * nights;
     const finalTotal = roomPriceTotal + cityTax;
 
-    // --- F. CALCULATE SAVINGS ("You Saved") ---
-    // Compare against Original Price (No Discount)
-    let originalBase = room.basePrice + rate.flatPremium;
-    if (numAdults > room.baseCapacity)
-      originalBase +=
-        (numAdults - room.baseCapacity) * (rate.extraAdultCharge || 0);
-    if (numChildren > 0)
-      originalBase += numChildren * (rate.extraChildCharge || 0);
-
-    // Add amenities to original price too for fair comparison
-    const originalTotal =
-      (originalBase + amenitiesCostPerNight) * nights + cityTax;
-    const discountAmount = Math.max(0, originalTotal - finalTotal);
-
-    // --- G. CREATE RAZORPAY ORDER ---
     const options = {
-      amount: finalTotal * 100, // Paise
+      amount: finalTotal * 100,
       currency: "INR",
       receipt: `rec_${Date.now()}`,
       payment_capture: 1,
@@ -113,8 +90,6 @@ export const initiateBooking = async (req, res) => {
       breakdown: {
         baseRatePerNight: Math.round(nightlyPrice),
         amenitiesCost: Math.round(amenitiesCostPerNight * nights),
-        subTotal: Math.round(originalTotal), // Original Price (Strike-through)
-        discountAmount: Math.round(discountAmount), // Savings
         roomPriceTotal,
         cityTax,
         finalTotal,
@@ -127,7 +102,7 @@ export const initiateBooking = async (req, res) => {
 };
 
 // ==========================================
-// 2. CONFIRM BOOKING (Updated for Strict Schema)
+// 2. CONFIRM BOOKING
 // ==========================================
 export const confirmBooking = async (req, res) => {
   try {
@@ -137,14 +112,10 @@ export const confirmBooking = async (req, res) => {
       razorpaySignature,
       guestDetails,
       bookingDetails,
-      financials, // ✅ This contains all the missing fields
+      financials,
     } = req.body;
 
-    // 🔴 DUMMY BYPASS CHECK
-    if (razorpayPaymentId.startsWith("pay_dummy")) {
-      console.log("⚠️ Skipping Signature Check for Dummy Payment");
-    } else {
-      // Real Signature Check
+    if (!razorpayPaymentId.startsWith("pay_dummy")) {
       const body = razorpayOrderId + "|" + razorpayPaymentId;
       const expectedSignature = crypto
         .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -158,14 +129,13 @@ export const confirmBooking = async (req, res) => {
       }
     }
 
-    // --- SAVE TO DB ---
+    // 🔴 CRITICAL: This works ONLY if 'authenticate' middleware is used on the route!
+    const userId = req.user ? req.user.sub : null;
+
     const newBooking = await Booking.create({
-      // 1. Guest Info
       guestName: `${guestDetails.firstName} ${guestDetails.lastName}`,
       email: guestDetails.email,
       phone: guestDetails.phone,
-
-      // 2. Address (Ensure it matches schema structure)
       address: {
         street: guestDetails.address.street || guestDetails.address || "N/A",
         city: guestDetails.address.city || "City",
@@ -173,37 +143,46 @@ export const confirmBooking = async (req, res) => {
         postalCode: guestDetails.address.postalCode || "000000",
         country: guestDetails.address.country || "India",
       },
-
-      user: req.user ? req.user._id : null,
-
-      // 3. Booking Meta
+      user: userId, // This was saving as NULL because middleware was missing
       roomType: bookingDetails.roomTypeId,
       ratePlan: bookingDetails.ratePlanId,
       checkIn: bookingDetails.checkIn,
       checkOut: bookingDetails.checkOut,
       nights: financials.nights,
-
       adults: bookingDetails.adults,
       children: bookingDetails.children,
-
       invoiceNumber: `ARA-${Math.floor(100000 + Math.random() * 900000)}`,
-
-      // 🔴 4. STRICT FINANCIALS (Fixes your error)
       baseRatePerNight: financials.baseRatePerNight,
       roomPriceTotal: financials.roomPriceTotal,
       amenitiesCost: financials.amenitiesCost || 0,
       subTotal: financials.subTotal,
-      tax: financials.cityTax || 0, // or financials.tax
+      tax: financials.cityTax || 0,
       discount: financials.discountAmount || 0,
-
-      totalPrice: financials.finalTotal, // This was the only one you were saving before!
-
-      // 5. Payment Status
+      totalPrice: financials.finalTotal,
       paymentStatus: "Paid",
       razorpayOrderId: razorpayOrderId || "order_dummy",
       razorpayPaymentId: razorpayPaymentId,
       status: "Confirmed",
     });
+
+    // Send Email
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2 style="color: #a39076;">Booking Confirmed!</h2>
+        <p>Dear ${newBooking.guestName},</p>
+        <p>Thank you for choosing Arabella Motor Inn. Your reservation is confirmed.</p>
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+           <p><strong>Booking ID:</strong> ${newBooking.invoiceNumber}</p>
+           <p><strong>Total Paid:</strong> ₹${newBooking.totalPrice}</p>
+        </div>
+      </div>
+    `;
+
+    sendEmail({
+      to: newBooking.email,
+      subject: `Booking Confirmed - ${newBooking.invoiceNumber}`,
+      html: emailHtml,
+    }).catch((err) => console.error("Failed to send email:", err));
 
     res.status(201).json({ success: true, booking: newBooking });
   } catch (err) {
@@ -211,6 +190,7 @@ export const confirmBooking = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 // ==========================================
 // 3. GET INVOICE
 // ==========================================
@@ -220,9 +200,27 @@ export const getBookingInvoice = async (req, res) => {
       .populate("roomType", "name")
       .populate("ratePlan", "name");
 
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (!booking) return res.status(404).send("Booking not found");
 
-    res.json({ success: true, invoice: booking });
+    const html = `<html><body><h1>Invoice ${booking.invoiceNumber}</h1><p>Total: ${booking.totalPrice}</p><button onclick="window.print()">Print</button></body></html>`;
+    res.send(html);
+  } catch (err) {
+    res.status(500).send("Error generating invoice");
+  }
+};
+
+// ==========================================
+// 4. GET MY BOOKINGS
+// ==========================================
+export const getUserBookings = async (req, res) => {
+  try {
+    // req.user.sub comes from the middleware
+    const bookings = await Booking.find({ user: req.user.sub })
+      .populate("roomType", "name images")
+      .populate("ratePlan", "name")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, data: bookings });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
