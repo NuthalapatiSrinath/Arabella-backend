@@ -7,7 +7,7 @@ import { dbConfig } from "./db.config.js";
 export const config = {
   app: {
     ...appConfig,
-    frontendUrl: "http://192.168.1.15:3000",
+    frontendUrl: "https://arabella-frontendd.vercel.app/",
   },
 
   db: dbConfig,
