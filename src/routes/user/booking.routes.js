@@ -3,35 +3,25 @@ import {
   initiateBooking,
   confirmBooking,
   getBookingInvoice,
-  getUserBookings, // ✅ Import the new function
+  getUserBookings,
 } from "../../controllers/user/bookingController.js";
-import { authenticate } from "../../middleware/auth.js"; // ✅ Import Auth Middleware
+import { authenticate } from "../../middleware/auth.js"; //
 
 const router = express.Router();
 
-// ==========================================
-// 1. PUBLIC ROUTES (No Login Required)
-// ==========================================
-
-// POST /api/bookings/initiate
-// Used to calculate price and create Razorpay order
+// 1. Initiate (Public)
 router.post("/initiate", initiateBooking);
 
-// POST /api/bookings/confirm
-// Used to verify payment and save booking to DB
-router.post("/confirm", confirmBooking);
+// 2. Confirm (PROTECTED - MUST HAVE 'authenticate')
+// 🔴 CRITICAL FIX: Added 'authenticate' here.
+// Without this, req.user is undefined, and booking saves as "Guest" (User: null)
+router.post("/confirm", authenticate, confirmBooking);
 
-// GET /api/bookings/:id/invoice
-// Used to view the HTML Invoice in a new tab
+// 3. Invoice (Public)
 router.get("/:id/invoice", getBookingInvoice);
 
-// ==========================================
-// 2. PROTECTED ROUTES (Login Required)
-// ==========================================
-
-// GET /api/bookings/
-// Used by "My Bookings" page to get list of user's bookings
-// ✅ Added 'authenticate' so req.user is populated
+// 4. My Bookings (Protected)
+// This was missing in your uploaded file!
 router.get("/", authenticate, getUserBookings);
 
 export default router;

@@ -1,4 +1,4 @@
-import Booking from "../../database/models/Booking.js";
+import Booking from "../../database/models/Booking.js"; //
 import RoomType from "../../database/models/RoomType.js";
 import RatePlan from "../../database/models/RatePlan.js";
 import Razorpay from "razorpay";
@@ -10,10 +10,9 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// ==========================================
-// 1. INITIATE BOOKING
-// ==========================================
+// ... initiateBooking remains the same ...
 export const initiateBooking = async (req, res) => {
+  /* ... (Your existing code for initiateBooking is fine) ... */
   try {
     const {
       roomTypeId,
@@ -102,7 +101,7 @@ export const initiateBooking = async (req, res) => {
 };
 
 // ==========================================
-// 2. CONFIRM BOOKING
+// 2. CONFIRM BOOKING (FIXED)
 // ==========================================
 export const confirmBooking = async (req, res) => {
   try {
@@ -129,7 +128,7 @@ export const confirmBooking = async (req, res) => {
       }
     }
 
-    // 🔴 CRITICAL: This works ONLY if 'authenticate' middleware is used on the route!
+    // ✅ FIX: This relies on 'authenticate' middleware being present in the route
     const userId = req.user ? req.user.sub : null;
 
     const newBooking = await Booking.create({
@@ -143,7 +142,7 @@ export const confirmBooking = async (req, res) => {
         postalCode: guestDetails.address.postalCode || "000000",
         country: guestDetails.address.country || "India",
       },
-      user: userId, // This was saving as NULL because middleware was missing
+      user: userId, // ✅ This will now be saved correctly
       roomType: bookingDetails.roomTypeId,
       ratePlan: bookingDetails.ratePlanId,
       checkIn: bookingDetails.checkIn,
@@ -192,7 +191,7 @@ export const confirmBooking = async (req, res) => {
 };
 
 // ==========================================
-// 3. GET INVOICE
+// 3. GET INVOICE (Updated to return JSON for React)
 // ==========================================
 export const getBookingInvoice = async (req, res) => {
   try {
@@ -200,17 +199,23 @@ export const getBookingInvoice = async (req, res) => {
       .populate("roomType", "name")
       .populate("ratePlan", "name");
 
-    if (!booking) return res.status(404).send("Booking not found");
+    if (!booking) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Booking not found" });
+    }
 
-    const html = `<html><body><h1>Invoice ${booking.invoiceNumber}</h1><p>Total: ${booking.totalPrice}</p><button onclick="window.print()">Print</button></body></html>`;
-    res.send(html);
+    // 🔴 CHANGE: Send JSON instead of HTML
+    // This allows your React "Rich Invoice" page to read the data and design it.
+    res.json({ success: true, invoice: booking });
   } catch (err) {
-    res.status(500).send("Error generating invoice");
+    console.error("Invoice Error:", err);
+    res.status(500).json({ success: false, message: "Error fetching invoice" });
   }
 };
 
 // ==========================================
-// 4. GET MY BOOKINGS
+// 4. GET MY BOOKINGS (ENSURE THIS IS HERE)
 // ==========================================
 export const getUserBookings = async (req, res) => {
   try {
