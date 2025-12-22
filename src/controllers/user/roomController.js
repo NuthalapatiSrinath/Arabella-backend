@@ -2,7 +2,6 @@ import RoomType from "../../database/models/RoomType.js";
 import RatePlan from "../../database/models/RatePlan.js";
 import Booking from "../../database/models/Booking.js";
 
-// Helper
 const calculateNights = (d1, d2) =>
   Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24));
 
@@ -14,18 +13,19 @@ export const searchRooms = async (req, res) => {
 
     const start = new Date(checkIn);
     const end = new Date(checkOut);
-    const totalGuests = Number(adults) + Number(children);
     const nights = calculateNights(start, end);
+    const numAdults = Number(adults);
+    const numChildren = Number(children);
+    const totalGuests = numAdults + numChildren;
 
-    // 1. Filter Rooms by Capacity
     const suitableRooms = await RoomType.find({
       maxOccupancy: { $gte: totalGuests },
+      maxAdults: { $gte: numAdults },
     });
 
     const availableRooms = [];
 
     for (let room of suitableRooms) {
-      // 2. Check Availability
       const conflictCount = await Booking.countDocuments({
         roomType: room._id,
         status: { $ne: "Cancelled" },
@@ -33,15 +33,26 @@ export const searchRooms = async (req, res) => {
       });
 
       if (room.totalStock - conflictCount > 0) {
-        // 3. Get Rates & Calculate Totals
+        // --- 1. APPLY ROOM DISCOUNT ---
+        // If Base is 500 and Discount is 20%, Effective Base is 400.
+        const roomDiscountPercent = room.discountPercentage || 0;
+        const effectiveBasePrice =
+          room.basePrice * (1 - roomDiscountPercent / 100);
+
         const plans = await RatePlan.find({ roomType: room._id });
 
         const rateOptions = plans.map((plan) => {
+          // --- 2. CALCULATE FINAL PRICE ---
+          // Use effectiveBasePrice instead of room.basePrice
           let nightly =
-            room.basePrice * plan.priceMultiplier + plan.flatPremium;
-          // Add Extra Guest Fee if applicable
-          if (totalGuests > room.baseCapacity)
-            nightly += (totalGuests - room.baseCapacity) * 20;
+            effectiveBasePrice * plan.priceMultiplier + plan.flatPremium;
+
+          if (numAdults > room.baseCapacity) {
+            nightly += (numAdults - room.baseCapacity) * plan.extraAdultCharge;
+          }
+          if (numChildren > 0) {
+            nightly += numChildren * plan.extraChildCharge;
+          }
 
           return {
             _id: plan._id,
@@ -50,8 +61,17 @@ export const searchRooms = async (req, res) => {
               breakfast: plan.includesBreakfast,
               refundable: plan.isRefundable,
             },
+            // Show the user they are getting a deal
+            discountText:
+              roomDiscountPercent > 0
+                ? `Special Deal: ${roomDiscountPercent}% OFF applied!`
+                : plan.discountText,
+
             pricePerNight: Math.round(nightly),
             totalPrice: Math.round(nightly * nights),
+
+            // Helpful: Send original price too so frontend can show strike-through (e.g. ~~500~~ 400)
+            originalPrice: Math.round(room.basePrice * nights),
           };
         });
 
@@ -68,7 +88,7 @@ export const searchRooms = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
+// ... getRoomById logic (similar update recommended)
 export const getRoomById = async (req, res) => {
   try {
     const room = await RoomType.findById(req.params.id);
