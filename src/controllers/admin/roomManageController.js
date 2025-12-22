@@ -64,13 +64,15 @@ export const createRoom = async (req, res) => {
     });
 
     // Auto-Create Rate Plans
+    // Auto-Create Rate Plans
     await RatePlan.create([
       {
         roomType: room._id,
         name: "Non Refundable",
         priceMultiplier: 0.9,
-        extraAdultCharge: 25,
-        extraChildCharge: 15,
+        // 🚀 CHANGE THESE VALUES
+        extraAdultCharge: 1000, // Charge ₹1000 per extra adult
+        extraChildCharge: 500, // Charge ₹500 per extra child
         isRefundable: false,
         discountText: "Save 10%",
       },
@@ -79,8 +81,9 @@ export const createRoom = async (req, res) => {
         name: "Flexible Breakfast",
         priceMultiplier: 1.0,
         flatPremium: 40,
-        extraAdultCharge: 35,
-        extraChildCharge: 20,
+        // 🚀 CHANGE THESE VALUES TOO
+        extraAdultCharge: 1200,
+        extraChildCharge: 600,
         isRefundable: true,
         includesBreakfast: true,
         discountText: "Free Breakfast",
