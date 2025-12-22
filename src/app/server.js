@@ -6,14 +6,12 @@ import routes from "./routes.js";
 
 const app = express();
 
-// allow CORS for your frontend
 app.use(
   cors({
-    origin: config.app.frontendUrl || "*",
+    origin: true, // ✅ allow all origins dynamically
     credentials: true,
   })
 );
-
 app.use(express.json());
 
 // Main Route
