@@ -98,46 +98,51 @@ export const createRoom = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
-// ==========================================
-// 2. UPDATE ROOM
-// ==========================================
-// ==========================================
-// 2. UPDATE ROOM
-// ==========================================
 export const updateRoom = async (req, res) => {
   try {
     const { id } = req.params;
-    let updateData = { ...req.body };
+
+    // 1. Check if room exists
     const room = await RoomType.findById(id);
     if (!room) return res.status(404).json({ message: "Room not found" });
 
-    // --- 🟢 IMAGE HANDLING LOGIC (UPDATED) ---
-    // 1. Get New Images (Uploaded Files)
+    let updateData = { ...req.body };
+
+    // --- 🖼️ IMAGE UPDATE LOGIC ---
+
+    // A. Get New Uploaded Images
+    // (req.files is populated by multer if 'images' field has files)
     const newImages = req.files ? req.files.map((f) => f.path) : [];
 
-    // 2. Get Retained Existing Images
-    // The frontend sends 'existingImages' as a JSON string of URLs to keep.
+    // B. Get Retained Existing Images
+    // The frontend sends a JSON string of URLs it wants to KEEP.
     let retainedImages = [];
-    if (req.body.existingImages) {
+
+    // We check if the field exists in the body.
+    // If the user deleted all images, frontend sends "[]" which is present.
+    // If the frontend failed to send the field (e.g. Header error), this is undefined.
+    if (req.body.existingImages !== undefined) {
       try {
         retainedImages = JSON.parse(req.body.existingImages);
       } catch (e) {
-        // Fallback for edge cases (shouldn't happen with correct frontend)
-        retainedImages =
-          typeof req.body.existingImages === "string"
-            ? [req.body.existingImages]
-            : req.body.existingImages;
+        // Handle case where it might be a single string or raw array
+        retainedImages = Array.isArray(req.body.existingImages)
+          ? req.body.existingImages
+          : [req.body.existingImages];
       }
+    } else {
+      // SAFETY FALLBACK: Only if field is COMPLETELY missing (e.g. API error),
+      // keep original images to prevent accidental data loss.
+      retainedImages = room.images;
     }
 
-    // 3. Combine them to get the final list
-    // This effectively deletes any image that wasn't in 'retainedImages'
-    updateData.images = [...retainedImages, ...newImages];
+    // C. Combine for Final List
+    const finalImages = [...retainedImages, ...newImages];
+    updateData.images = finalImages;
 
-    // --- (Rest of the logic remains the same) ---
+    // --- END IMAGE LOGIC ---
 
-    // Parse Numbers
+    // Parse Numbers (Safety check for empty strings)
     const numericFields = [
       "basePrice",
       "discountPercentage",
@@ -150,6 +155,8 @@ export const updateRoom = async (req, res) => {
       "maxOccupancy",
       "maxAdults",
       "maxChildren",
+      "extraAdultPrice",
+      "extraChildPrice",
     ];
     numericFields.forEach((field) => {
       if (updateData[field] !== undefined && updateData[field] !== "") {
@@ -165,6 +172,7 @@ export const updateRoom = async (req, res) => {
             ? JSON.parse(updateData.amenities)
             : updateData.amenities;
       } catch (e) {
+        // Fallback for comma separated string
         updateData.amenities = updateData.amenities
           .toString()
           .split(",")
@@ -179,7 +187,7 @@ export const updateRoom = async (req, res) => {
         .map((s) => s.trim());
     }
 
-    // Update Room
+    // Update DB
     const updatedRoom = await RoomType.findByIdAndUpdate(id, updateData, {
       new: true,
     });
@@ -196,14 +204,14 @@ export const updateRoom = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Room & Pricing Updated",
+      message: "Room Updated Successfully",
       data: updatedRoom,
     });
   } catch (err) {
+    console.error("Update Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
-
 // ==========================================
 // 3. DELETE ROOM
 // ==========================================
