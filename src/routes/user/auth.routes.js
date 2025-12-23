@@ -5,8 +5,9 @@ import {
   verifyEmailController,
   forgotPasswordController,
   resetPasswordController,
+  getProfile,
 } from "../../controllers/user/authController.js";
-
+import { authenticate } from "../../middleware/auth.js";
 const router = express.Router();
 
 // --- Registration & Verification ---
@@ -19,5 +20,6 @@ router.post("/login", loginController);
 // --- Password Management ---
 router.post("/forgot-password", forgotPasswordController);
 router.post("/reset-password", resetPasswordController);
-
+// ✅ NEW ROUTE: Get Profile
+router.get("/me", authenticate, getProfile);
 export default router;

@@ -214,3 +214,23 @@ export const resetPasswordController = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+// ==========================================
+// GET CURRENT USER PROFILE
+// ==========================================
+export const getProfile = async (req, res) => {
+  try {
+    // req.user.sub comes from 'authenticate' middleware
+    const user = await User.findById(req.user.sub).select("-password");
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error("Profile Error:", err);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
