@@ -102,6 +102,9 @@ export const createRoom = async (req, res) => {
 // ==========================================
 // 2. UPDATE ROOM
 // ==========================================
+// ==========================================
+// 2. UPDATE ROOM
+// ==========================================
 export const updateRoom = async (req, res) => {
   try {
     const { id } = req.params;
@@ -109,11 +112,30 @@ export const updateRoom = async (req, res) => {
     const room = await RoomType.findById(id);
     if (!room) return res.status(404).json({ message: "Room not found" });
 
-    // Append Images
-    if (req.files && req.files.length > 0) {
-      const newImages = req.files.map((f) => f.path);
-      updateData.images = [...room.images, ...newImages];
+    // --- 🟢 IMAGE HANDLING LOGIC (UPDATED) ---
+    // 1. Get New Images (Uploaded Files)
+    const newImages = req.files ? req.files.map((f) => f.path) : [];
+
+    // 2. Get Retained Existing Images
+    // The frontend sends 'existingImages' as a JSON string of URLs to keep.
+    let retainedImages = [];
+    if (req.body.existingImages) {
+      try {
+        retainedImages = JSON.parse(req.body.existingImages);
+      } catch (e) {
+        // Fallback for edge cases (shouldn't happen with correct frontend)
+        retainedImages =
+          typeof req.body.existingImages === "string"
+            ? [req.body.existingImages]
+            : req.body.existingImages;
+      }
     }
+
+    // 3. Combine them to get the final list
+    // This effectively deletes any image that wasn't in 'retainedImages'
+    updateData.images = [...retainedImages, ...newImages];
+
+    // --- (Rest of the logic remains the same) ---
 
     // Parse Numbers
     const numericFields = [
@@ -135,7 +157,7 @@ export const updateRoom = async (req, res) => {
       }
     });
 
-    // Parse Arrays (Amenities/Furniture)
+    // Parse Amenities
     if (updateData.amenities) {
       try {
         updateData.amenities =
@@ -149,26 +171,26 @@ export const updateRoom = async (req, res) => {
           .map((s) => ({ name: s.trim(), price: 0 }));
       }
     }
+
+    // Parse Furniture
     if (typeof updateData.furniture === "string") {
       updateData.furniture = updateData.furniture
         .split(",")
         .map((s) => s.trim());
     }
 
-    // 1. Update the RoomType document
+    // Update Room
     const updatedRoom = await RoomType.findByIdAndUpdate(id, updateData, {
       new: true,
     });
 
-    // 2. 🚀 UPDATE ASSOCIATED RATE PLANS (Crucial step!)
-    // If extra charges are provided in the update, sync them to RatePlans
+    // Update Rate Plans
     if (req.body.extraAdultPrice || req.body.extraChildPrice) {
       const updateFields = {};
       if (req.body.extraAdultPrice)
         updateFields.extraAdultCharge = Number(req.body.extraAdultPrice);
       if (req.body.extraChildPrice)
         updateFields.extraChildCharge = Number(req.body.extraChildPrice);
-
       await RatePlan.updateMany({ roomType: id }, { $set: updateFields });
     }
 
