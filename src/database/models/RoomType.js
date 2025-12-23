@@ -8,7 +8,7 @@ const roomTypeSchema = new mongoose.Schema(
 
     // --- Physical Specs ---
     size: { type: Number, required: true }, // Internal Sort (sqm)
-    dimensions: { type: String }, // NEW: Display format e.g. "6x6 ft"
+    dimensions: { type: String }, // Display format e.g. "6x6 ft"
 
     bedType: { type: String, default: "Single Bed" },
     bedSize: { type: String },
@@ -23,9 +23,8 @@ const roomTypeSchema = new mongoose.Schema(
     maxAdults: { type: Number, required: true },
     maxChildren: { type: Number, required: true },
 
-    // --- AMENITIES & ADD-ONS (NEW STRUCTURE) ---
-    // Old: ["Wifi", "AC"]
-    // New: [{ name: "Wifi", price: 0 }, { name: "Candle Light", price: 500 }]
+    // --- AMENITIES & ADD-ONS ---
+    // [{ name: "Wifi", price: 0 }, { name: "Candle Light", price: 500 }]
     amenities: [
       {
         name: { type: String, required: true },
@@ -38,6 +37,10 @@ const roomTypeSchema = new mongoose.Schema(
     // --- Pricing ---
     basePrice: { type: Number, required: true },
     discountPercentage: { type: Number, default: 0 },
+
+    // 🚀 NEW FIELDS (Added for Admin Dynamic Pricing)
+    extraAdultPrice: { type: Number, default: 1000 },
+    extraChildPrice: { type: Number, default: 500 },
   },
   { timestamps: true }
 );

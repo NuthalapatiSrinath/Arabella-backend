@@ -5,12 +5,13 @@ import {
   updateRoom,
   deleteRoom,
 } from "../../controllers/admin/roomManageController.js";
-
+import { getAllRooms } from "../../controllers/admin/roomManageController.js";
 const router = express.Router();
 
 // 1. Create Room (Form-Data: Handles Images + Data)
 // matches POST /api/admin/rooms
 router.post("/", upload.array("images", 5), createRoom);
+router.get("/", getAllRooms); // matches GET /api/admin/rooms
 
 // 2. Update Room (Form-Data: can append images)
 // matches PUT /api/admin/rooms/:id

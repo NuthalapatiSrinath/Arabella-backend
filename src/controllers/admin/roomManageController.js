@@ -15,42 +15,42 @@ export const createRoom = async (req, res) => {
 
     const imageUrls = req.files ? req.files.map((f) => f.path) : [];
 
-    // --- PARSE AMENITIES (JSON String or Array) ---
-    // Postman sends: '[{"name":"Wifi","price":0}, {"name":"Candle Light","price":500}]'
+    // --- PARSE AMENITIES ---
     let amenities = [];
     if (req.body.amenities) {
       try {
-        // Check if it's already an object (JSON content-type) or string (FormData)
         amenities =
           typeof req.body.amenities === "string"
             ? JSON.parse(req.body.amenities)
             : req.body.amenities;
       } catch (e) {
-        console.error("Amenities Parse Error. Fallback to simple list.");
-        // Fallback: If user sent simple comma string "Wifi, AC"
         const simpleList = req.body.amenities.toString().split(",");
         amenities = simpleList.map((s) => ({ name: s.trim(), price: 0 }));
       }
     }
 
-    // Parse Furniture List
+    // Parse Furniture
     let furniture = req.body.furniture;
     if (typeof furniture === "string")
       furniture = furniture.split(",").map((s) => s.trim());
+
+    // --- 🚀 NEW: GET EXTRA CHARGES FROM FORM ---
+    // Default to 1000/500 if admin doesn't set them
+    const extraAdultPrice = Number(req.body.extraAdultPrice) || 1000;
+    const extraChildPrice = Number(req.body.extraChildPrice) || 500;
 
     // CREATE ROOM
     const room = await RoomType.create({
       ...req.body,
       images: imageUrls,
-      amenities: amenities, // Save with prices
+      amenities: amenities,
       furniture: furniture,
 
-      // Parse Numbers
       basePrice: Number(req.body.basePrice),
       discountPercentage: Number(discountPercentage || 0),
       totalStock: Number(req.body.totalStock),
       size: Number(req.body.size),
-      dimensions: req.body.dimensions, // Save "6x6 ft"
+      dimensions: req.body.dimensions,
 
       baseCapacity: Number(req.body.baseCapacity),
       regularBedCount: Number(
@@ -61,18 +61,19 @@ export const createRoom = async (req, res) => {
       maxOccupancy: Number(req.body.maxOccupancy),
       maxAdults: Number(req.body.maxAdults),
       maxChildren: Number(req.body.maxChildren),
+
+      // Save these on RoomType too for reference (optional schema update needed if you want to store it here permanently)
+      // but for now, we rely on RatePlans.
     });
 
-    // Auto-Create Rate Plans
-    // Auto-Create Rate Plans
+    // --- AUTO-CREATE RATE PLANS WITH DYNAMIC EXTRA CHARGES ---
     await RatePlan.create([
       {
         roomType: room._id,
         name: "Non Refundable",
         priceMultiplier: 0.9,
-        // 🚀 CHANGE THESE VALUES
-        extraAdultCharge: 1000, // Charge ₹1000 per extra adult
-        extraChildCharge: 500, // Charge ₹500 per extra child
+        extraAdultCharge: extraAdultPrice, // ✅ Uses Admin Input
+        extraChildCharge: extraChildPrice, // ✅ Uses Admin Input
         isRefundable: false,
         discountText: "Save 10%",
       },
@@ -81,9 +82,8 @@ export const createRoom = async (req, res) => {
         name: "Flexible Breakfast",
         priceMultiplier: 1.0,
         flatPremium: 40,
-        // 🚀 CHANGE THESE VALUES TOO
-        extraAdultCharge: 1200,
-        extraChildCharge: 600,
+        extraAdultCharge: extraAdultPrice, // ✅ Uses Admin Input
+        extraChildCharge: extraChildPrice, // ✅ Uses Admin Input
         isRefundable: true,
         includesBreakfast: true,
         discountText: "Free Breakfast",
@@ -130,11 +130,12 @@ export const updateRoom = async (req, res) => {
       "maxChildren",
     ];
     numericFields.forEach((field) => {
-      if (updateData[field] !== undefined)
+      if (updateData[field] !== undefined && updateData[field] !== "") {
         updateData[field] = Number(updateData[field]);
+      }
     });
 
-    // Parse Arrays
+    // Parse Arrays (Amenities/Furniture)
     if (updateData.amenities) {
       try {
         updateData.amenities =
@@ -142,29 +143,48 @@ export const updateRoom = async (req, res) => {
             ? JSON.parse(updateData.amenities)
             : updateData.amenities;
       } catch (e) {
-        // Fallback
         updateData.amenities = updateData.amenities
           .toString()
           .split(",")
           .map((s) => ({ name: s.trim(), price: 0 }));
       }
     }
-
     if (typeof updateData.furniture === "string") {
       updateData.furniture = updateData.furniture
         .split(",")
         .map((s) => s.trim());
     }
 
+    // 1. Update the RoomType document
     const updatedRoom = await RoomType.findByIdAndUpdate(id, updateData, {
       new: true,
     });
-    res.json({ success: true, message: "Room Updated", data: updatedRoom });
+
+    // 2. 🚀 UPDATE ASSOCIATED RATE PLANS (Crucial step!)
+    // If extra charges are provided in the update, sync them to RatePlans
+    if (req.body.extraAdultPrice || req.body.extraChildPrice) {
+      const updateFields = {};
+      if (req.body.extraAdultPrice)
+        updateFields.extraAdultCharge = Number(req.body.extraAdultPrice);
+      if (req.body.extraChildPrice)
+        updateFields.extraChildCharge = Number(req.body.extraChildPrice);
+
+      await RatePlan.updateMany({ roomType: id }, { $set: updateFields });
+    }
+
+    res.json({
+      success: true,
+      message: "Room & Pricing Updated",
+      data: updatedRoom,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
-// ... deleteRoom same as before
+
+// ==========================================
+// 3. DELETE ROOM
+// ==========================================
 export const deleteRoom = async (req, res) => {
   try {
     const { id } = req.params;
@@ -173,6 +193,18 @@ export const deleteRoom = async (req, res) => {
       return res.status(404).json({ message: "Room not found" });
     await RatePlan.deleteMany({ roomType: id });
     res.json({ success: true, message: "Room Deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ==========================================
+// 4. GET ALL ROOMS
+// ==========================================
+export const getAllRooms = async (req, res) => {
+  try {
+    const rooms = await RoomType.find();
+    res.json({ success: true, data: rooms });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
