@@ -212,7 +212,7 @@ export const updateRoom = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-// 3. DELETE ROOM
+// 3. DELETE ROO
 // ==========================================
 export const deleteRoom = async (req, res) => {
   try {
