@@ -8,7 +8,12 @@ const app = express();
 
 app.use(
   cors({
-    origin: ["https://your-frontend.vercel.app"], // 👈 FIX THIS
+    origin: function (origin, callback) {
+      // allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+
+      return callback(null, true); // allow all origins dynamically
+    },
     credentials: true,
   })
 );
